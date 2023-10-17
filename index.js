@@ -2,6 +2,8 @@ const express = require("express");
 const morgan = require("morgan");
 const https = require("https");
 const fs = require("fs");
+const rfs = require("rotating-file-stream");
+const path = require("path");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { constants } = require("buffer");
 const env = require("dotenv").config();
@@ -45,7 +47,26 @@ if (jSession == "") {
 }
 
 // Logging
-app.use(morgan("dev"));
+
+const pad = num => (num > 9 ? "" : "0") + num;
+const generator = (time, index) => {
+  if (!time) return "file.log";
+
+  var month = time.getFullYear() + "" + pad(time.getMonth() + 1);
+  var day = pad(time.getDate());
+  var hour = pad(time.getHours());
+  var minute = pad(time.getMinutes());
+
+  return `${month}/${month}${day}-${hour}${minute}-${index}-file.log`;
+};
+
+const accessLogStream = rfs.createStream(generator, {
+  interval: '1d', // rotate daily
+  path: path.join(__dirname, 'logs'),
+  size: '10M', // rotate every 10 MegaBytes written
+})
+
+app.use(morgan('[:date[clf]] :referrer :req[header] :method :url - :status', { stream: accessLogStream }));
 
 //Check if JSESSION is acquired
 app.get("/jsession", (req, res, next) => {
