@@ -1,17 +1,21 @@
-const express = require("express");
-const morgan = require("morgan");
-const https = require("https");
-const fs = require("fs");
-const rfs = require("rotating-file-stream");
-const path = require("path");
-const { createProxyMiddleware } = require("http-proxy-middleware");
-const { constants } = require("buffer");
-const env = require("dotenv").config();
+import express from "express";
+import morgan from "morgan";
+import { fileURLToPath } from 'url';
+import * as fs from "fs";
+import * as rfs from "rotating-file-stream";
+import * as path from "path";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { constants } from "buffer";
+import axios from "axios";
+import 'dotenv/config'
+import { Agent, createServer } from "https";
 
 // Create Express Server
 const app = express();
 
 // Configuration
+const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
+const __dirname = path.dirname(__filename); // get the name of the directory
 const PORT = 8080;
 const HOST = "localhost";
 const API_SERVICE_URL = process.env.API_SERVICE_URL;
@@ -24,16 +28,23 @@ const options = {
 
 const getjSession = () =>  {
       const URL = `${API_SERVICE_URL}/login`;
-      const CRED = {
+      const BODY = {
         auth_user: process.env.AUTH_USER,
         password: process.env.PASSWORD,
       };
       const getSEN = async () => {
-        const rawResponse = await fetch(URL, {
-          method: "POST",
-          body: JSON.stringify(CRED),
-        });
-        jSession = rawResponse.headers.get("Set-Cookie").split(";")[0];
+        const rawResponse = await axios.post(URL, BODY, {
+          // proxy: {
+          //   protocol: 'http',
+          //   host: 'nseproxy.sce.com',
+          //   port: 8080,
+          //   auth: {
+          //     username: process.env.PROXY_USER,
+          //     password: process.env.PROXY_PASSWORD
+          //   }
+          // }
+        })
+        jSession = rawResponse.headers.get("Set-Cookie")[0].split(";")[0];
         console.log(jSession);
       };
       getSEN();
@@ -79,6 +90,10 @@ app.use(
   createProxyMiddleware({
     target: API_SERVICE_URL,
     changeOrigin: true,
+    agent: new Agent({
+      maxSockets: Infinity,
+      keepAlive: true,
+    }),
     pathRewrite: {'^/enmanager' : ''},
     onProxyReq: (proxyReq, req, res) => {
         proxyReq.setHeader("Cookie", jSession);
@@ -92,4 +107,4 @@ app.listen(PORT, HOST, () => {
 });
 
 // Start Proxy on HTTPS 443
-https.createServer(options, app).listen(443)
+// createServer(options, app).listen(443)
